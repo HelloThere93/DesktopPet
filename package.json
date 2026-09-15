@@ -1,0 +1,41 @@
+{
+  "name": "adi-pet",
+  "version": "0.1.0",
+  "description": "A desktop pet that is also a computer-use agent",
+  "main": "dist/main/bootstrap.js",
+  "author": "dabes",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:renderer",
+    "dev": "npm run build && electron .",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "dist": "npm run build && electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/ws": "^8.5.10",
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "node-sqlite3-wasm": "^0.8.24",
+    "ws": "^8.18.0"
+  },
+  "build": {
+    "appId": "com.dabes.adipet",
+    "productName": "Adi Pet",
+    "files": [
+      "dist/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

@@ -1,0 +1,4202 @@
+/*
+ * Adi — visual system.
+ *
+ * The thesis: a soft creature wired into a machine that can do real damage.
+ * Everything here holds that tension.
+ *
+ * Colour is the pet's own palette rather than a generic accent: the blue is its
+ * body, the amber its antenna bulb, the green how it looks while working. The
+ * app and the character are the same object.
+ *
+ * Three faces for three real voices — Bahnschrift (condensed, technical) labels
+ * the machine, Segoe UI Variable carries the creature's conversation, Cascadia
+ * Code is the machine speaking for itself in tool output.
+ */
+
+:root {
+  /* Two materials, one object: a soft creature wired into a hard machine.
+     The neutrals are cool and deep so the pet's blue glow reads as light and
+     the amber "authorize me" signal reads as heat. Pet colours are the brand
+     and are left exactly as the creature wears them. */
+
+  /* The void the whole object floats in. */
+  --void: #080911;
+  --ink-900: #0c0e18;
+  --ink-850: #11131f; /* machine surface */
+  --ink-800: #171a28; /* raised surface */
+  --ink-700: #202436; /* hover */
+  --line: #2b3149;
+  --line-soft: #1a1e2e;
+
+  /* The machine speaks in cool grey; the creature speaks in warm light. */
+  --text: #e7e9f3;
+  --text-dim: #9aa2c2;
+  --text-faint: #646c90;
+  --warm: #f4efe6; /* Adi's own voice, a half-degree warmer than the machine */
+
+  /* Straight from the creature. */
+  --pet: #6ea8fe;
+  --pet-deep: #4a86e8;
+  --think: #b79cff;
+  --work: #64d68a;
+  --bulb: #ffb454;
+  --stop: #ff6b6b;
+
+  /* Light the creature throws. */
+  --glow-pet: rgba(110, 168, 254, 0.45);
+  --glow-bulb: rgba(255, 180, 84, 0.5);
+  /* The faint ruled grid printed only on machine surfaces. */
+  --grid: rgba(126, 148, 210, 0.045);
+
+  --radius: 14px; /* the soft object */
+  --radius-sm: 6px; /* the machine's panels */
+
+  --shadow-float: 0 18px 44px rgba(4, 6, 16, 0.66);
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 10px 26px rgba(4, 6, 16, 0.4);
+
+  --face-ui: 'Bahnschrift', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --face-body: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --face-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, monospace;
+
+  font-family: var(--face-body);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The `hidden` attribute only sets `display: none` at UA-stylesheet strength,
+   which any class rule with a display outranks — `.chat { display: flex }` kept
+   the chat panel laid out below the viewport while it was supposedly hidden. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  /* Transparent so the pet floats over the desktop with no window chrome. */
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+}
+
+button,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pet);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Pet
+   ==========================================================================
+
+   Animation budget is the constraint here, not imagination. The window is
+   transparent and always on top, so every frame that anything moves is
+   composited over the whole desktop — measured earlier at ~60% of a core when
+   animating continuously at 60fps, against 1% asleep.
+
+   So: the idle loop stays stepped and slow, everything is transform or opacity
+   (never layout), and expression comes from things that move rarely — a blink,
+   a glance, a reaction to being grabbed — rather than from something moving
+   all the time.
+   ========================================================================== */
+
+.pet-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.pet {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 200px;
+  display: grid;
+  place-items: center;
+  /* Deliberately NOT -webkit-app-region: drag. Chromium hands drag regions to
+     the OS, which swallows mouse events entirely — a drag region can never be
+     clicked. Dragging is done manually in app.ts so click still works. */
+  cursor: grab;
+}
+
+.pet:active { cursor: grabbing; }
+
+.pet-body {
+  width: 132px;
+  height: 153px;
+  overflow: visible;
+  filter: drop-shadow(0 8px 18px rgba(8, 10, 24, 0.55));
+}
+
+/* Body colour is three stops of one hue, swapped per mood. Naming them by role
+   rather than by colour is what lets the gradient stay put while the mood
+   changes underneath it. */
+.pet {
+  --body-lit: #9cc6ff;
+  --body-mid: #6ea8fe;
+  --body-deep: #3f77d6;
+  --accent: var(--pet);
+}
+
+.pet[data-mood='thinking'] {
+  --body-lit: #d3c4ff;
+  --body-mid: #b79cff;
+  --body-deep: #8163d6;
+  --accent: var(--think);
+}
+
+.pet[data-mood='working'] {
+  --body-lit: #9beeb8;
+  --body-mid: #64d68a;
+  --body-deep: #37a65e;
+  --accent: var(--work);
+}
+
+.pet[data-mood='sleeping'] {
+  --body-lit: #5a6597;
+  --body-mid: #414a72;
+  --body-deep: #2b3155;
+  --accent: #5a6597;
+}
+
+.pet[data-mood='error'] {
+  --body-lit: #ff9d9d;
+  --body-mid: #ff6b6b;
+  --body-deep: #cf4444;
+  --accent: var(--stop);
+}
+
+.blob {
+  fill: url(#body-grad);
+  transition: fill 0.45s ease;
+}
+
+.belly {
+  fill: url(#belly-grad);
+  pointer-events: none;
+}
+
+.rim {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.shadow {
+  fill: rgba(0, 0, 0, 0.32);
+  transition: transform 0.25s ease;
+  transform-origin: 50% 105px;
+}
+
+.eye { fill: #14172a; }
+.glint { fill: #fff; opacity: 0.95; }
+.glint-sm { opacity: 0.55; }
+.cheek { fill: rgba(255, 255, 255, 0.18); }
+
+.mouth {
+  fill: none;
+  stroke: #14172a;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: d 0.25s ease;
+}
+
+/* Mood shows in the mouth, which is the cheapest possible expression: one
+   attribute, no extra elements, no animation running. */
+.pet[data-mood='thinking'] .mouth { d: path('M45 67 Q50 65 55 67'); }
+.pet[data-mood='working'] .mouth { d: path('M43 66 Q50 73 57 66'); }
+.pet[data-mood='error'] .mouth { d: path('M43 70 Q50 63 57 70'); }
+.pet[data-mood='sleeping'] .mouth { d: path('M45 68 Q50 71 55 68'); }
+
+/* ------------------------------------------------------------- blinking */
+
+/* Blink by closing the eyes themselves rather than covering them with a lid
+   shape. A lid has to be painted in the body colour to be invisible when open,
+   and the body is a gradient — the lid cannot match it at a different position,
+   so it showed as two pale rectangles on the forehead. */
+.eyes {
+  transform-origin: 50px 48px;
+  transition: transform 0.09s ease-out;
+}
+
+.pet.blinking .eyes { transform: scaleY(0.08); }
+.pet[data-mood='sleeping'] .eyes { transform: scaleY(0.1); }
+
+/* --------------------------------------------------------------- eyes */
+
+/* Set from JS as the cursor moves. Clamped there, not here. */
+.eye-shift {
+  transform: translate(var(--look-x, 0px), var(--look-y, 0px));
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.pet[data-mood='sleeping'] .eye-shift { transform: none; }
+
+/* -------------------------------------------------------------- antenna */
+
+.stalk {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  transition: stroke 0.45s ease;
+}
+
+.bulb {
+  fill: var(--bulb);
+  transition: fill 0.45s ease;
+}
+
+.bulb-glow {
+  fill: var(--bulb);
+  opacity: 0.22;
+  transition: fill 0.45s ease, opacity 0.3s ease;
+}
+
+/* Auto-approval is worn by the creature so it is visible with chat closed, and
+   it distinguishes the two modes the way the header pill does: amber for file
+   edits, red for no confirmations at all. One alarming colour for both would
+   make the milder setting look like the dangerous one. */
+.pet[data-auto='auto-edit'] .stalk { stroke: var(--bulb); }
+
+.pet[data-auto='auto'] .bulb,
+.pet[data-auto='auto'] .bulb-glow { fill: var(--stop); }
+.pet[data-auto='auto'] .stalk { stroke: var(--stop); }
+
+/* Secondary motion: the antenna trails the body by a beat instead of moving
+   with it. One negative animation-delay is the whole trick, and it is what
+   makes the thing read as attached rather than drawn on. */
+.antenna {
+  animation: sway 3.4s steps(40, end) infinite;
+  animation-delay: -0.28s;
+  transform-origin: 50px 12px;
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-3.5deg); }
+  50% { transform: rotate(3.5deg); }
+}
+
+/* ------------------------------------------------------------- motion */
+
+.bob {
+  /* Stepped rather than continuous: every frame is composited in software, so
+     ~12fps costs a fraction of 60 and looks the same for a gentle float. */
+  animation: bob 3.4s steps(40, end) infinite;
+  transform-origin: 50% 92%;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-5px) scale(1.016, 0.984); }
+}
+
+/* Squash and stretch lives on its own group so a grab can override it without
+   fighting the idle loop. */
+.squish {
+  transform-origin: 50% 97px;
+  transition: transform 0.16s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.pet.grabbed .squish { transform: scale(1.1, 0.9); }
+.pet.grabbed .shadow { transform: scale(1.12, 1); }
+
+/* Landing wobble after a drag: a short spring, not a loop. */
+.pet.dropped .squish { animation: land 0.42s cubic-bezier(0.3, 1.5, 0.4, 1); }
+
+@keyframes land {
+  0% { transform: scale(1.14, 0.86); }
+  45% { transform: scale(0.95, 1.06); }
+  75% { transform: scale(1.03, 0.98); }
+  100% { transform: scale(1, 1); }
+}
+
+/* A one-off stretch, fired occasionally while idle so it is not perfectly
+   metronomic. Runs for under a second and then nothing moves again. */
+.pet.stretching .squish { animation: stretch 1.1s ease-in-out; }
+
+@keyframes stretch {
+  0% { transform: scale(1, 1); }
+  35% { transform: scale(0.93, 1.1) translateY(-4px); }
+  70% { transform: scale(1.05, 0.95); }
+  100% { transform: scale(1, 1); }
+}
+
+/* Thinking speeds the float and brightens the bulb; working pulses it. */
+.pet[data-mood='thinking'] .bob { animation-duration: 1.5s; }
+.pet[data-mood='thinking'] .antenna { animation-duration: 1.5s; }
+.pet[data-mood='thinking'] .bulb-glow { opacity: 0.4; }
+
+.pet[data-mood='working'] .bulb { animation: pulse 0.75s ease-in-out infinite; }
+.pet[data-mood='working'] .bulb-glow { animation: pulse-glow 0.75s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%, 100% { r: 4; }
+  50% { r: 5.6; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.22; r: 7; }
+  50% { opacity: 0.5; r: 9.5; }
+}
+
+/* A shake for errors: brief, then over. */
+.pet[data-mood='error'] .squish { animation: shake 0.4s ease-in-out 2; }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px) rotate(-2deg); }
+  75% { transform: translateX(3px) rotate(2deg); }
+}
+
+/* Asleep, nothing animates at all. This is the difference between 1% of a core
+   and 60%, so it matters more than it looks. */
+.pet[data-mood='sleeping'] .bob,
+.pet[data-mood='sleeping'] .antenna,
+.pet[data-mood='sleeping'] .bulb,
+.pet[data-mood='sleeping'] .bulb-glow,
+.pet[data-mood='sleeping'] .squish {
+  animation: none;
+}
+
+.pet[data-mood='sleeping'] .zzz { opacity: 1; }
+.pet[data-mood='sleeping'] .rim { opacity: 0.35; }
+
+.zzz {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  font: 600 14px var(--face-ui);
+  fill: var(--text-dim);
+}
+
+.pet-badge {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--bulb);
+  color: #101220;
+  font-family: var(--face-ui);
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 14px rgba(255, 180, 84, 0.5);
+}
+.privacy-badge {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(150, 170, 255, 0.18);
+  border: 1px solid #9aaeff;
+  color: #c6d1ff;
+  font-family: var(--face-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0 14px rgba(154, 174, 255, 0.25);
+}
+
+/* ==========================================================================
+   Quick chat — the pet answering in place
+   ========================================================================== */
+
+.quick {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 14px;
+  -webkit-app-region: no-drag;
+}
+
+.quick-input {
+  width: 100%;
+  padding: 9px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(21, 24, 39, 0.95);
+  color: var(--text);
+  font-size: 13px;
+  user-select: text;
+  box-shadow: 0 8px 22px rgba(8, 10, 24, 0.5);
+}
+
+.quick-input::placeholder { color: var(--text-faint); }
+
+.quick-input:focus {
+  outline: none;
+  border-color: var(--pet);
+  box-shadow: 0 8px 22px rgba(8, 10, 24, 0.5), 0 0 0 3px rgba(110, 168, 254, 0.16);
+}
+
+/* The answer is speech: it sits above the creature and points back at it. */
+.quick-answer {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  /* Sits directly on top of the creature so the tail meets its head, rather
+     than floating at the top of the window pointing at nothing. */
+  bottom: 208px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(27, 31, 48, 0.98);
+  border: 1px solid var(--line);
+  box-shadow: 0 14px 34px rgba(8, 10, 24, 0.62);
+  font-size: 13px;
+  line-height: 1.55;
+  user-select: text;
+  -webkit-app-region: no-drag;
+  animation: quick-in 0.22s ease-out;
+}
+
+@keyframes quick-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* The tail is what makes this the pet talking rather than a notification. */
+.quick-answer::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 13px;
+  height: 13px;
+  margin-left: -6px;
+  background: rgba(27, 31, 48, 0.98);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: rotate(45deg);
+}
+
+.quick-answer.dismissing { animation: quick-out 0.3s ease-in forwards; }
+
+@keyframes quick-out {
+  to { opacity: 0; transform: translateY(-5px); }
+}
+
+/* How long is left before it clears itself — drawn, not spelled out. */
+.quick-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  border-radius: 0 0 14px 14px;
+  background: var(--pet);
+  opacity: 0.45;
+  transform-origin: left center;
+}
+
+/* ==========================================================================
+   Approval bubble
+   ========================================================================== */
+
+.pet-stage.has-bubble .pet {
+  inset: 0 0 auto 0;
+  height: 150px;
+}
+
+.pet-stage.has-bubble .pet-body {
+  width: 100px;
+  height: 110px;
+}
+
+.pet-stage.has-bubble .bubble {
+  top: 142px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  width: auto;
+  max-width: none;
+  overflow: auto;
+}
+
+.bubble {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 100%;
+  max-width: 340px;
+  padding: 13px;
+  background: var(--ink-850);
+  border: 1px solid var(--bulb);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 34px rgba(8, 10, 24, 0.62);
+  -webkit-app-region: no-drag;
+  z-index: 10;
+}
+
+.bubble-reason,
+.approval-reason {
+  font-family: var(--face-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bulb);
+  margin-bottom: 9px;
+}
+
+.bubble-cmd,
+.approval-cmd {
+  font-family: var(--face-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--ink-900);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  max-height: 132px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.bubble-detail,
+.approval-detail {
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.bubble-detail summary,
+.approval-detail summary {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+
+.bubble-detail pre,
+.approval-detail pre {
+  margin: 6px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  color: var(--text);
+}
+
+.bubble-actions,
+.approval-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* ==========================================================================
+   Chat shell
+   ========================================================================== */
+
+.chat {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  position: relative;
+  background: var(--ink-900);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-850);
+  border-right: 1px solid var(--line-soft);
+  -webkit-app-region: no-drag;
+}
+
+.sidebar.collapsed { display: none; }
+
+.sidebar-top {
+  padding: 11px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.convo-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 7px;
+}
+
+/* Conversations read as log entries: a tick in the margin, the title, then a
+   quiet line of metadata. The tick lights up for the open one. */
+.convo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 9px 9px 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.convo::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background 0.18s ease, top 0.18s ease, bottom 0.18s ease;
+}
+
+.convo:hover { background: var(--ink-800); }
+.convo:hover::before { background: var(--text-faint); }
+.convo.active { background: var(--ink-800); }
+
+.convo.active::before {
+  background: var(--pet);
+  top: 8px;
+  bottom: 8px;
+  box-shadow: 0 0 10px rgba(110, 168, 254, 0.5);
+}
+
+.convo-text { flex: 1; min-width: 0; }
+
+.convo-title {
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.convo-summary {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--text-dim);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.convo.active .convo-title { color: #ffffff; }
+
+.convo-meta {
+  font-family: var(--face-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+/* Row actions stay hidden until hover so the list reads as titles, not buttons. */
+.convo-actions { display: none; gap: 2px; }
+.convo:hover .convo-actions,
+.convo.active .convo-actions { display: flex; }
+
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+
+.convo-empty {
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 16px 10px;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------- header */
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--ink-850);
+  border-bottom: 1px solid var(--line-soft);
+  -webkit-app-region: drag;
+}
+
+.chat-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+#convo-title {
+  font-family: var(--face-ui);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+#model-badge {
+  font-family: var(--face-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* The status dot is the same light as the pet's antenna. */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.dot.ok { background: var(--work); box-shadow: 0 0 9px rgba(100, 214, 138, 0.55); }
+.dot.bad { background: var(--stop); box-shadow: 0 0 9px rgba(255, 107, 107, 0.5); }
+
+.muted { color: var(--text-dim); font-size: 12px; }
+
+.auto-pill {
+  font-family: var(--face-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 180, 84, 0.14);
+  border: 1px solid var(--bulb);
+  color: var(--bulb);
+  flex-shrink: 0;
+}
+
+.auto-pill.full {
+  background: rgba(255, 107, 107, 0.14);
+  border-color: var(--stop);
+  color: #ffa8a8;
+}
+
+.privacy-pill {
+  background: rgba(150, 170, 255, 0.16);
+  border-color: #9aaeff;
+  color: #c6d1ff;
+}
+
+/* ---------------------------------------------------------------- messages */
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  user-select: text;
+}
+
+/* The message list is a flex column, so every child must opt out of shrinking.
+   Otherwise an overflowing conversation compresses each bubble instead of
+   scrolling, and long tool output gets clipped mid-line. */
+.msg,
+.tool,
+.notice,
+.approval {
+  flex-shrink: 0;
+}
+
+.msg {
+  max-width: 74%;
+  padding: 11px 14px;
+  border-radius: var(--radius);
+  line-height: 1.58;
+  font-size: 14px;
+  word-wrap: break-word;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: linear-gradient(180deg, var(--pet) 0%, var(--pet-deep) 100%);
+  color: #0b1226;
+  border-bottom-right-radius: 4px;
+  font-weight: 500;
+}
+
+.msg.assistant {
+  align-self: flex-start;
+  background: var(--ink-800);
+  border: 1px solid var(--line-soft);
+  border-bottom-left-radius: 4px;
+}
+
+.msg.summary {
+  align-self: center;
+  max-width: 92%;
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.msg.inactive { opacity: 0.45; }
+
+.msg.error {
+  align-self: center;
+  max-width: 88%;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.42);
+  color: #ffc4c4;
+  font-size: 13px;
+}
+
+.notice {
+  align-self: center;
+  font-family: var(--face-ui);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--ink-850);
+  border: 1px solid var(--line-soft);
+}
+
+/* ------------------------------------------------------ tool call readouts */
+
+/* The signature: a tool call is an instrument readout. Its lamp is the same
+   light as the pet's antenna, so the creature and its machinery match. */
+.tool {
+  align-self: flex-start;
+  max-width: 82%;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--ink-850);
+  overflow: hidden;
+}
+
+.tool-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  cursor: pointer;
+  font-family: var(--face-mono);
+  font-size: 12px;
+  color: var(--pet);
+}
+
+.tool-head::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bulb);
+  box-shadow: 0 0 8px rgba(255, 180, 84, 0.7);
+  animation: lamp 1s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes lamp {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.tool-head .status {
+  margin-left: auto;
+  font-family: var(--face-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.tool-head .status.ok { color: var(--work); }
+.tool-head .status.bad { color: var(--stop); }
+
+/* The lamp settles once the call resolves. */
+.tool:has(.status.ok) .tool-head::before {
+  background: var(--work);
+  box-shadow: 0 0 8px rgba(100, 214, 138, 0.6);
+  animation: none;
+}
+
+.tool:has(.status.bad) .tool-head::before {
+  background: var(--stop);
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.6);
+  animation: none;
+}
+
+.tool-body {
+  padding: 9px 11px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--face-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow: auto;
+  color: var(--text-dim);
+  user-select: text;
+}
+
+/* --------------------------------------------------------------- approvals */
+
+.approval {
+  align-self: stretch;
+  padding: 13px;
+  border: 1px solid var(--bulb);
+  border-radius: var(--radius);
+  background: rgba(255, 180, 84, 0.06);
+}
+
+/* ==========================================================================
+   Markdown
+   ========================================================================== */
+
+.msg-body > :first-child,
+#quick-answer-body > :first-child { margin-top: 0; }
+.msg-body > :last-child,
+#quick-answer-body > :last-child { margin-bottom: 0; }
+
+.md-p { margin: 0 0 9px; white-space: pre-wrap; }
+
+.md-h {
+  font-family: var(--face-ui);
+  font-weight: 600;
+  margin: 12px 0 6px;
+  line-height: 1.3;
+}
+
+.md-h1 { font-size: 16.5px; }
+.md-h2 { font-size: 15px; }
+.md-h3 { font-size: 14px; }
+.md-h4 { font-size: 13px; color: var(--text-dim); }
+
+.md-list { margin: 5px 0 9px; padding-left: 21px; }
+.md-list li { margin: 4px 0; }
+
+.msg-body code,
+#quick-answer-body code {
+  font-family: var(--face-mono);
+  font-size: 0.9em;
+  background: var(--ink-900);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.msg.user .msg-body code {
+  background: rgba(11, 18, 38, 0.2);
+  border-color: rgba(11, 18, 38, 0.3);
+}
+
+.md-pre {
+  margin: 9px 0;
+  padding: 11px 12px;
+  background: var(--ink-900);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.md-pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.msg-body a,
+#quick-answer-body a { color: var(--pet); }
+.msg.user .msg-body a { color: #0b1226; text-decoration: underline; }
+
+.msg-body hr,
+#quick-answer-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 11px 0;
+}
+
+.msg-body strong { font-weight: 700; }
+.msg-body em { font-style: italic; }
+
+/* ------------------------------------------------------------------ images */
+
+.msg-image {
+  display: block;
+  margin-top: 9px;
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  cursor: zoom-in;
+}
+
+.msg-image.expanded { max-height: none; cursor: zoom-out; }
+.msg .msg-body:empty { display: none; }
+
+/* ==========================================================================
+   Composer
+   ========================================================================== */
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 11px 12px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--ink-850);
+  align-items: flex-end;
+}
+
+#input {
+  flex: 1;
+  resize: none;
+  max-height: 160px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--ink-900);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  user-select: text;
+}
+
+#input::placeholder { color: var(--text-faint); }
+
+#input:focus {
+  outline: none;
+  border-color: var(--pet);
+  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.14);
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 12px 0;
+  background: var(--ink-850);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+}
+
+.chip-x {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.chip-x:hover { color: var(--stop); }
+
+/* ==========================================================================
+   Controls
+   ========================================================================== */
+
+.btn {
+  padding: 8px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--ink-800);
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--face-ui);
+  font-size: 13px;
+  font-weight: 500;
+  -webkit-app-region: no-drag;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover { border-color: var(--pet); background: var(--ink-700); }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--pet) 0%, var(--pet-deep) 100%);
+  border-color: var(--pet-deep);
+  color: #0b1226;
+  font-weight: 600;
+}
+
+.btn-primary:hover { filter: brightness(1.08); }
+
+.btn-ghost { background: transparent; }
+.btn-block { width: 100%; }
+
+.icon-btn {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  -webkit-app-region: no-drag;
+}
+
+.icon-btn:hover {
+  background: var(--ink-800);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.icon-btn.danger:hover { color: var(--stop); border-color: var(--stop); }
+
+/* ==========================================================================
+   Settings drawer
+   ========================================================================== */
+
+.settings {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 322px;
+  background: var(--ink-850);
+  border-left: 1px solid var(--line);
+  padding: 15px;
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: -18px 0 42px rgba(8, 10, 24, 0.55);
+  animation: drawer-in 0.18s ease-out;
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(14px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  font-family: var(--face-ui);
+}
+
+.field { display: block; margin-bottom: 17px; }
+
+.field-label {
+  display: block;
+  font-family: var(--face-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.field select {
+  width: 100%;
+  background: var(--ink-800);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.field select:hover { border-color: var(--pet); }
+
+.field-note {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   Scrollbars
+   ========================================================================== */
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ink-700); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #30375a; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+
+/* ==========================================================================
+   Voice
+   ========================================================================== */
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--ink-850);
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Listening is a live state, so the indicator breathes rather than sitting. */
+.voice-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--work);
+  box-shadow: 0 0 10px rgba(100, 214, 138, 0.6);
+  animation: lamp 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.voice-meter {
+  flex: 1;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--ink-700);
+  overflow: hidden;
+}
+
+/* Scaled rather than resized: the level updates ~11x a second and transform
+   does not force layout. */
+.voice-level {
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--work), var(--pet));
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.09s linear;
+}
+
+.voice-status {
+  font-family: var(--face-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  min-width: 76px;
+}
+
+#btn-voice.on {
+  color: var(--work);
+  border-color: var(--work);
+  background: rgba(100, 214, 138, 0.1);
+}
+
+
+/* Quick chat controls sit on one row with the field. */
+.quick-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-row .quick-input { flex: 1; }
+
+.quick-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(21, 24, 39, 0.95);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 8px 22px rgba(8, 10, 24, 0.5);
+  -webkit-app-region: no-drag;
+}
+
+.quick-btn:hover { border-color: var(--pet); color: var(--text); }
+
+.quick-btn.on,
+#btn-speak.on {
+  color: var(--work);
+  border-color: var(--work);
+  background: rgba(100, 214, 138, 0.12);
+}
+
+/* ==========================================================================
+   Sidebar tabs — kept threads vs. quick questions
+   ========================================================================== */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 3px;
+  background: var(--ink-900);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.tab {
+  flex: 1;
+  padding: 5px 8px;
+  font-family: var(--face-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.tab:hover { color: var(--text-dim); }
+
+.tab.active {
+  color: #ffffff;
+  background: var(--ink-700);
+}
+
+.quick-note {
+  padding: 8px 12px 4px;
+  font-family: var(--face-ui);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+/* A starred quick chat is exempt from the sweep, so it says so at a glance. */
+.icon-btn.star { color: var(--text-faint); }
+.icon-btn.star:hover { color: var(--bulb); }
+.icon-btn.star.on { color: var(--bulb); }
+
+/* Starred rows keep their star visible even when the row is not hovered. */
+.convo-actions:has(.star.on) { display: flex; }
+
+/* ==========================================================================
+   Access points and MCP servers
+   ========================================================================== */
+
+.key-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.key-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.key-row .btn-block { flex: 1; }
+
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.mcp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  background: var(--ink-900);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+}
+
+.mcp-tools {
+  flex: 1 0 100%;
+  margin-top: 3px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 4px;
+}
+
+.mcp-tools summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mcp-tools-list {
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  margin-top: 5px;
+  overflow-y: auto;
+}
+
+.mcp-tool {
+  padding: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.mcp-tool-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mcp-tool-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--face-ui);
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-tool-permission {
+  flex: 0 0 auto;
+  color: var(--bulb);
+  font-size: 9px;
+}
+
+.mcp-tool-toggle {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  font-size: 9px;
+}
+
+.mcp-tool-description {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mcp-name {
+  font-family: var(--face-ui);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-meta {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 55%;
+}
+.mcp-toggle {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+/* The quick bar's camera stays lit while a screenshot is waiting to be sent. */
+.quick-btn.armed {
+  color: var(--ink-900);
+  background: var(--bulb);
+  border-color: var(--bulb);
+}
+
+/* ==========================================================================
+   REDESIGN — two materials
+   ==========================================================================
+
+   A soft creature (warm light, no edges) bolted to a hard machine (cool grey,
+   ruled panels, lit instruments). The rules below supersede the chrome above by
+   source order; the pet SVG and its animation are left untouched.
+
+   The one typographic idea carrying the identity: Bahnschrift set as uppercase
+   instrument labels is the machine's voice; humanist Segoe with generous
+   leading is the creature's. The gap between the two registers is the design.
+   ========================================================================== */
+
+body { background: transparent; }
+
+/* A reusable instrument label: the machine naming its own parts. */
+.label-mech,
+.tool-head > span:first-child,
+.convo-meta,
+.field-label,
+.frame-label,
+#model-badge,
+.tab,
+.mcp-meta,
+.tool-head .status {
+  font-family: var(--face-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------- chat shell */
+
+.chat {
+  background: var(--void);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-float);
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+.sidebar {
+  width: 244px;
+  background: linear-gradient(180deg, var(--ink-900), var(--void));
+  border-right: 1px solid var(--line-soft);
+}
+
+.sidebar-top {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Chats / Quick: an unmistakable segmented switch, not two links. */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--void);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  margin: 0;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tab:hover { color: var(--text-dim); }
+
+.tab.active {
+  color: var(--void);
+  background: var(--pet);
+  box-shadow: 0 2px 10px var(--glow-pet);
+}
+
+.quick-note {
+  padding: 9px 12px 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.convo-list { padding: 8px 8px 12px; }
+
+/* A conversation reads as a log line: a lamp in the margin, the subject, then a
+   quiet instrument caption. The lamp lights for the open thread. */
+.convo {
+  gap: 8px;
+  padding: 9px 10px 9px 16px;
+  border-radius: 8px;
+  transition: background 0.14s ease;
+}
+
+.convo::before {
+  left: 6px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.convo:hover { background: var(--ink-800); }
+.convo:hover::before { background: var(--text-faint); }
+.convo.active { background: var(--ink-800); }
+
+.convo.active::before {
+  background: var(--pet);
+  box-shadow: 0 0 10px var(--glow-pet);
+}
+
+.convo-title {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.convo.active .convo-title { color: var(--warm); }
+
+.convo-meta {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+.sidebar-foot {
+  padding: 11px 14px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-faint);
+}
+
+/* ----------------------------------------------------------------- header */
+
+.chat-head {
+  padding: 11px 14px;
+  background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
+  border-bottom: 1px solid var(--line);
+}
+
+#convo-title {
+  font-family: var(--face-body);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--warm);
+  letter-spacing: 0;
+}
+
+/* The model badge is an instrument tag: the machine stating its own part number. */
+#model-badge {
+  font-family: var(--face-ui);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--void);
+}
+
+.dot.ok { background: var(--work); box-shadow: 0 0 10px rgba(100, 214, 138, 0.6); }
+
+.auto-pill {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+}
+
+/* --------------------------------------------------------------- messages */
+
+.messages {
+  padding: 22px 26px;
+  gap: 18px;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(110, 168, 254, 0.04), transparent 60%),
+    var(--ink-900);
+}
+
+/* Adi speaks in warm light with no container: the creature's glow bleeding into
+   its words. A luminous spine on the left is the only edge — the tie back to the
+   pet. This is the risk: the agent does not live in a bubble. */
+.msg.assistant {
+  align-self: stretch;
+  max-width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 2px 0 2px 18px;
+  position: relative;
+  color: var(--warm);
+  font-size: 14.5px;
+  line-height: 1.62;
+}
+
+.msg.assistant::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--pet), transparent 130%);
+  box-shadow: 0 0 12px var(--glow-pet);
+}
+
+/* The operator's own line: quiet, cool, precise. No candy gradient. */
+.msg.user {
+  align-self: flex-end;
+  max-width: 76%;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-right: 2px solid var(--pet);
+  border-radius: 12px 4px 4px 12px;
+  color: var(--text);
+  font-weight: 400;
+  padding: 10px 14px;
+}
+
+.msg.summary {
+  font-family: var(--face-ui);
+  letter-spacing: 0.06em;
+  font-size: 11.5px;
+  border-color: var(--line-soft);
+  color: var(--text-faint);
+}
+
+.msg.error {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  border-radius: var(--radius-sm);
+}
+
+.notice {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: var(--void);
+  border: 1px solid var(--line-soft);
+}
+
+/* --------------------------------------------- the signature: instruments */
+
+/* Every machine action is a lit channel on a panel: a status lamp, a Bahnschrift
+   channel name, a mono readout printed on a faintly ruled ground. This is where
+   the whole design spends its boldness; everything around it stays quiet. */
+.tool {
+  align-self: stretch;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ink-850);
+  box-shadow: var(--shadow-panel);
+}
+
+.tool-head {
+  gap: 10px;
+  padding: 9px 12px;
+  font-family: var(--face-ui);
+  font-size: 11.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--pet);
+  position: relative;
+}
+
+/* The running channel draws a signal line under its label. */
+.tool-head::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--pet), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  opacity: 0.7;
+  animation: signal 1.4s linear infinite;
+}
+
+.tool:has(.status.ok) .tool-head::after,
+.tool:has(.status.bad) .tool-head::after { animation: none; opacity: 0; }
+
+@keyframes signal {
+  0% { background-position: -40% 0; }
+  100% { background-position: 140% 0; }
+}
+
+.tool-head .status {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--text-faint);
+}
+
+.tool-body {
+  border-top: 1px solid var(--line-soft);
+  padding: 11px 13px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  background:
+    repeating-linear-gradient(180deg, transparent 0 21px, var(--grid) 21px 22px),
+    var(--void);
+}
+
+.tool-body.tool-result { white-space: normal; }
+.tool-body .md-p { white-space: pre-wrap; }
+.tool-body a { color: var(--pet); text-underline-offset: 2px; }
+.tool-body .md-pre { margin: 8px 0; }
+.tool-body .md-table-wrap { margin: 6px 0 8px; }
+
+.tool-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 13px 9px;
+  background: var(--void);
+}
+.tool-actions[hidden] { display: none; }
+
+.recovery-guidance {
+  margin: 9px 13px 11px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 196, 92, 0.35);
+  border-radius: var(--radius-sm);
+  color: var(--bulb);
+  font-family: var(--face-ui);
+  font-size: 11.5px;
+  line-height: 1.45;
+  background: rgba(255, 196, 92, 0.07);
+}
+
+/* --------------------------------------------------------------- approvals */
+
+/* The machine asking to be trusted. Amber, because it is heat, not error: a
+   control panel waiting for a key turn. Reused by the inline card and the
+   floating bubble beside the pet so both read as the same request. */
+.approval,
+.bubble {
+  border: 1px solid var(--bulb);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, rgba(255, 180, 84, 0.08), rgba(255, 180, 84, 0.02));
+  box-shadow: 0 0 0 1px rgba(255, 180, 84, 0.08), var(--shadow-float);
+}
+
+.approval-reason,
+.bubble-reason {
+  font-family: var(--face-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bulb);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* A lamp before the label, like the tool channel. */
+.approval-reason::before,
+.bubble-reason::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bulb);
+  box-shadow: 0 0 9px var(--glow-bulb);
+  animation: lamp 1.1s ease-in-out infinite;
+}
+
+.approval-cmd,
+.bubble-cmd {
+  background: var(--void);
+  border: 1px solid rgba(255, 180, 84, 0.22);
+  border-radius: 5px;
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- markdown */
+
+.msg-body code,
+#quick-answer-body code {
+  background: var(--void);
+  border: 1px solid var(--line-soft);
+}
+
+.md-pre {
+  background: var(--void);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.md-h {
+  font-family: var(--face-body);
+  color: var(--warm);
+  letter-spacing: -0.01em;
+}
+
+.msg-body a,
+#quick-answer-body a { color: var(--pet); text-underline-offset: 2px; }
+
+.md-table-wrap {
+  max-width: 100%;
+  margin: 8px 0 10px;
+  overflow-x: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.md-table th,
+.md-table td {
+  padding: 7px 9px;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+  white-space: normal;
+}
+
+.md-table th {
+  background: var(--ink-800);
+  color: var(--warm);
+  font-weight: 600;
+}
+
+.md-table tr:last-child td { border-bottom: 0; }
+.md-table th:last-child,
+.md-table td:last-child { border-right: 0; }
+/* --------------------------------------------------------------- composer */
+
+.composer {
+  padding: 12px 14px;
+  gap: 8px;
+  background: linear-gradient(180deg, var(--ink-900), var(--void));
+  border-top: 1px solid var(--line);
+}
+
+#input {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--void);
+  font-size: 14px;
+}
+
+#input:focus {
+  border-color: var(--pet);
+  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.16), 0 0 22px rgba(110, 168, 254, 0.08);
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.btn {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--ink-800);
+  font-size: 12.5px;
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.06s ease;
+}
+
+.btn:hover { border-color: var(--pet); background: var(--ink-700); }
+.btn:active { transform: translateY(1px); }
+
+/* The single warm action: everything else is a hairline. */
+.btn-primary {
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--pet), var(--pet-deep));
+  color: var(--void);
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(74, 134, 232, 0.32);
+}
+
+.btn-primary:hover {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--pet), var(--pet-deep));
+  filter: brightness(1.07);
+}
+
+.icon-btn {
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.icon-btn:hover { color: var(--pet); border-color: var(--line); background: var(--ink-800); }
+
+/* --------------------------------------------------------------- settings */
+
+.settings {
+  background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
+  border-left: 1px solid var(--line);
+}
+
+.field-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.field select,
+#key-input,
+#baseurl-input,
+#workspace-root-input {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--void);
+}
+.workspace-consent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.mcp-row {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-soft);
+  background: var(--void);
+}
+
+/* ==========================================================================
+   Quick chat — the pet in place
+   ========================================================================== */
+
+/* The ask field: a luminous capsule that reads as the creature listening. */
+.jobs-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.job-row {
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.job-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.job-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.job-status {
+  flex: 0 0 auto;
+  color: var(--pet);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.job-status.failed { color: var(--stop); }
+.job-status.cancelled { color: var(--text-faint); }
+
+.job-progress,
+.job-summary {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.job-summary {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.job-manifest {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.job-cancel {
+  margin-top: 7px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--stop);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.job-cancel:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.mutations-list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.mutation-row {
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.mutation-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mutation-summary {
+  min-width: 0;
+  color: var(--text);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.mutation-status {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mutation-status.undoable { color: var(--pet); }
+.mutation-status.undone { color: var(--work); }
+.mutation-status.stale,
+.mutation-status.failed { color: var(--stop); }
+.mutation-status.uncertain { color: var(--bulb); }
+
+.mutation-meta,
+.mutation-reason {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mutation-reason { color: var(--text-dim); }
+
+.mutation-artifacts {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mutation-undo {
+  margin-top: 7px;
+  padding: 3px 8px;
+  border: 1px solid rgba(110, 168, 254, 0.45);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pet);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mutation-undo:hover {
+  background: rgba(110, 168, 254, 0.1);
+}
+
+.project-list,
+.assignment-list,
+.diagnostics-list {
+  display: grid;
+  gap: 5px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.project-row,
+.assignment-row,
+.diagnostic-row {
+  padding: 7px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.project-name,
+.assignment-title,
+.diagnostic-label {
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.project-meta,
+.project-detail,
+.assignment-meta,
+.assignment-detail,
+.diagnostic-detail,
+.diagnostics-summary,
+.diagnostics-metrics,
+.diagnostic-failures {
+  margin-top: 3px;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.assignment-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.assignment-status {
+  color: var(--work);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.assignment-status.done { color: var(--text-faint); }
+.assignment-status.archived { color: var(--bulb); }
+
+.diagnostic-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diagnostic-status {
+  color: var(--work);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagnostic-status.warning { color: var(--bulb); }
+.diagnostic-status.error { color: var(--stop); }
+
+.diagnostic-failures {
+  padding: 7px 8px;
+  border-left: 2px solid var(--stop);
+  background: rgba(255, 107, 107, 0.06);
+}
+
+.permission-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.permission-row {
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.permission-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.permission-tool {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-family: var(--face-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.permission-date {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.permission-sample {
+  margin-top: 5px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.permission-remove {
+  margin-top: 7px;
+  padding: 3px 8px;
+  color: var(--stop);
+  font-size: 10px;
+}
+
+.lesson-list {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.lesson-row {
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.lesson-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lesson-label {
+  color: var(--text);
+  font-family: var(--face-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.lesson-date {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.lesson-text {
+  margin-top: 5px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.lesson-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.lesson-actions .btn {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.lesson-remove {
+  color: var(--stop);
+}
+
+.activity {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 322px;
+  padding: 15px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 42px rgba(8, 10, 24, 0.55);
+  z-index: 20;
+  animation: drawer-in 0.18s ease-out;
+}
+
+.references {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 322px;
+  padding: 15px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 42px rgba(8, 10, 24, 0.55);
+  z-index: 20;
+  animation: drawer-in 0.18s ease-out;
+}
+
+.reference-list {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 18px;
+}
+
+.reference-empty {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.reference-row {
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+}
+
+.reference-row-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.reference-kind {
+  color: var(--pet);
+  font-family: var(--face-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reference-label {
+  min-width: 0;
+  flex: 1;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.reference-target {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-family: var(--face-mono);
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.reference-remove {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  font-size: 11px;
+}
+
+.reference-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.reference-buttons .btn {
+  width: 100%;
+}
+.activity-state {
+  padding: 8px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.activity-cancel {
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.activity-row {
+  padding: 7px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.quick-input {
+  border: 1px solid var(--line);
+  background: rgba(9, 11, 20, 0.94);
+  box-shadow: 0 10px 26px rgba(4, 6, 16, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.quick-input:focus {
+  border-color: var(--pet);
+  box-shadow: 0 10px 26px rgba(4, 6, 16, 0.55), 0 0 0 3px rgba(110, 168, 254, 0.18),
+    0 0 24px rgba(110, 168, 254, 0.14);
+}
+
+.quick-btn {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: rgba(9, 11, 20, 0.94);
+  color: var(--text-dim);
+  backdrop-filter: blur(8px);
+}
+
+.quick-btn:hover { border-color: var(--pet); color: var(--text); }
+
+.quick-btn.on,
+#btn-speak.on,
+.quick-btn.armed {
+  color: var(--void);
+  background: var(--bulb);
+  border-color: var(--bulb);
+}
+
+/* The answer is the creature speaking: warm light, a soft edge, the tail that
+   makes it Adi and not a notification. */
+.quick-answer {
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgba(20, 23, 37, 0.98), rgba(14, 16, 27, 0.98));
+  box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.06), var(--shadow-float);
+  backdrop-filter: blur(10px);
+  color: var(--warm);
+  line-height: 1.6;
+}
+
+.quick-answer::after {
+  background: rgba(14, 16, 27, 0.98);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The countdown is a filament in the pet's own light, thinning as it depletes. */
+.quick-timer {
+  height: 2px;
+  background: linear-gradient(90deg, var(--pet), var(--think));
+  opacity: 0.6;
+  box-shadow: 0 0 8px var(--glow-pet);
+}
+
+.text-dialog {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(5, 7, 16, 0.76);
+  backdrop-filter: blur(5px);
+  -webkit-app-region: no-drag;
+}
+
+.text-dialog-card {
+  width: min(500px, 100%);
+  display: grid;
+  gap: 11px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
+  box-shadow: 0 24px 64px rgba(2, 4, 12, 0.75);
+}
+
+.text-dialog-title {
+  color: var(--warm);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+#text-dialog-input {
+  width: 100%;
+  min-height: 78px;
+  max-height: 220px;
+  resize: vertical;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+  color: var(--text);
+  font: 13px/1.45 var(--face-body);
+  outline: none;
+  user-select: text;
+}
+
+#text-dialog-input:focus {
+  border-color: var(--pet);
+  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.14);
+}
+
+.text-dialog-hint {
+  color: var(--text-faint);
+  font-family: var(--face-ui);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
+
+.text-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.command-palette {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: 44px 22px 20px;
+  background: rgba(5, 7, 16, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.command-palette-card {
+  width: min(520px, 100%);
+  max-height: min(590px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
+  box-shadow: 0 24px 64px rgba(2, 4, 12, 0.72), 0 0 0 1px rgba(110, 168, 254, 0.06);
+}
+
+.command-palette-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px 8px;
+}
+
+.command-palette-kicker {
+  color: var(--text-faint);
+  font-family: var(--face-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.command-palette-head kbd,
+.command-option-arrow {
+  color: var(--text-faint);
+  font-family: var(--face-mono);
+  font-size: 10px;
+}
+
+.command-palette-head kbd {
+  padding: 3px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--void);
+}
+
+.command-palette-input {
+  width: calc(100% - 28px);
+  margin: 0 14px 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--void);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  user-select: text;
+}
+
+.command-palette-input:focus {
+  border-color: var(--pet);
+  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.14);
+}
+
+.command-palette-input::placeholder { color: var(--text-faint); }
+
+.command-palette-list {
+  display: grid;
+  gap: 3px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+}
+
+.command-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.command-option:hover,
+.command-option.active {
+  border-color: var(--line);
+  background: var(--ink-800);
+}
+
+.command-option.active {
+  box-shadow: inset 3px 0 0 var(--pet);
+}
+
+.command-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.command-option-title {
+  color: var(--warm);
+  font-size: 13px;
+}
+
+.command-option-detail {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-option-arrow {
+  flex: 0 0 auto;
+  opacity: 0;
+}
+
+.command-option.active .command-option-arrow,
+.command-option:hover .command-option-arrow {
+  opacity: 1;
+  color: var(--pet);
+}
+
+.command-palette-empty {
+  padding: 18px 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.command-palette-foot {
+  padding: 9px 14px 11px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-faint);
+  font-family: var(--face-ui);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-align: right;
+}
+
+/* The floating approval bubble beside the pet is the machine panel, not a card. */
+.bubble { padding: 14px; }
+
+/* ------------------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-head::after { animation: none; opacity: 0; }
+  .approval-reason::before,
+  .bubble-reason::before { animation: none; }
+  .quick-answer { animation: none; }
+}
+
+/* User message is a dark panel now, so its inline content is lit like anywhere
+   else rather than the old dark-ink-on-blue treatment. */
+.msg.user .msg-body a { color: var(--pet); text-decoration: underline; }
+.msg.user .msg-body code {
+  background: var(--void);
+  border: 1px solid var(--line-soft);
+  color: var(--text);
+}
+
+/* ==========================================================================
+   Pass 2 — after looking at it
+   ==========================================================================
+
+   Seeing it rendered showed the boldness was spent in the wrong place: a filled
+   "New chat" slab and a filled tab pill stacked in the sidebar corner, both
+   shouting, while Send — the only action that commits anything — was the
+   quietest control on screen. Saturated pet-blue fill is now reserved for
+   exactly one thing per surface, and the sidebar states itself with weight and
+   a lit margin instead of with area.
+   ========================================================================== */
+
+/* New chat is a quiet, wide affordance. It is a beginning, not a commitment. */
+#btn-new {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--text-dim);
+  font-family: var(--face-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+
+#btn-new:hover {
+  border-style: solid;
+  border-color: var(--pet);
+  color: var(--pet);
+  background: rgba(110, 168, 254, 0.06);
+}
+
+/* The tab switch states itself with a lit margin and weight, not a blue slab. */
+.tab.active {
+  color: var(--warm);
+  background: var(--ink-800);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.tab.active::after {
+  content: '';
+  display: block;
+  height: 2px;
+  margin: 5px -4px -4px;
+  border-radius: 2px;
+  background: var(--pet);
+  box-shadow: 0 0 8px var(--glow-pet);
+}
+
+/* --------------------------------------------------------------- rhythm */
+
+/* Consecutive replies are one voice continuing, not two separate events, so
+   they close up; a turn change gets the full gap. */
+.msg.assistant + .msg.assistant { margin-top: -8px; }
+.msg.user + .msg.assistant,
+.msg.assistant + .msg.user { margin-top: 4px; }
+
+/* The operator's line is quieter than the machine's panels — it is the one
+   thing on screen that was already understood when it was typed. */
+.msg.user {
+  max-width: 64%;
+  background: rgba(23, 26, 40, 0.7);
+  border-color: var(--line-soft);
+  color: var(--text-dim);
+  font-size: 13.5px;
+  padding: 9px 13px;
+}
+
+/* --------------------------------------------------------------- header */
+
+.chat-head { padding: 9px 14px; }
+
+#model-badge {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  border-color: var(--line-soft);
+  padding: 3px 9px;
+}
+
+/* ------------------------------------------------------------ scrollbars */
+
+/* The default bar is a pale slab that breaks the panel edge. Make it part of
+   the machine: thin, dark, and lit only while it is being used. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pet);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* --------------------------------------------------------------- polish */
+
+/* Tool readouts sit tighter to the reply that caused them. */
+.msg.assistant + .tool { margin-top: -4px; }
+
+/* Sidebar captions are quieter than the subjects they describe. */
+.convo-meta { font-size: 9px; opacity: 0.85; }
+
+/* The composer's own controls stay hairline so Send is unmistakably the action. */
+.composer .icon-btn { border-color: transparent; }
+.composer .icon-btn:hover { border-color: var(--line); }
+
+/* ==========================================================================
+   Pass 3 — details caught on screen
+   ========================================================================== */
+
+/* Chromium draws stepper arrows on styled scrollbars, which put two little
+   nubs at the ends of every panel. The bar should be a hairline, not a widget. */
+::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+
+/* Colour belongs to the creature. The composer and quick-bar glyphs are machine
+   controls, so they are desaturated into the panel and only light up on use —
+   which also stops one full-colour camera emoji sitting among grey ones. */
+.composer .icon-btn,
+.quick-btn {
+  filter: grayscale(1);
+  opacity: 0.72;
+  transition: opacity 0.14s ease, filter 0.14s ease, border-color 0.14s ease;
+}
+
+.composer .icon-btn:hover,
+.quick-btn:hover,
+.composer .icon-btn:focus-visible,
+.quick-btn:focus-visible {
+  filter: grayscale(0);
+  opacity: 1;
+}
+
+/* An armed or active control is doing something, so it keeps its colour. */
+.quick-btn.on,
+.quick-btn.armed,
+#btn-speak.on,
+#btn-voice.on {
+  filter: none;
+  opacity: 1;
+}
+
+/* The keyboard hint the placeholder used to carry, put where it belongs: a
+   quiet caption on the composer itself, visible only while typing. */
+.composer { position: relative; }
+
+.composer::after {
+  content: 'Enter to send · Shift+Enter for a new line';
+  position: absolute;
+  left: 14px;
+  bottom: -2px;
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+
+.composer:focus-within::after { opacity: 0.75; }
+.composer:focus-within { padding-bottom: 20px; }
+
+/* ==========================================================================
+   Pass 4 — the quick bubble, seen properly
+   ========================================================================== */
+
+/* The tail was being clipped away and inventing a scrollbar at the same time:
+   an absolutely-positioned ::after at bottom:-7px inside a box that scrolls is
+   both cut off and counted as overflow. Let the bubble be the shape and give
+   the scrolling to the text inside it, which is what should scroll anyway. */
+.quick-answer {
+  overflow: visible;
+  max-height: none;
+  padding: 13px 15px 14px;
+}
+
+#quick-answer-body {
+  max-height: 168px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#quick-answer-body strong { font-weight: 700; }
+#quick-answer-body em { font-style: italic; }
+
+/* Now that it is not clipped, the tail can actually read as speech. It sits
+   above the countdown so the two never overlap. */
+.quick-answer::after {
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: rgba(14, 16, 27, 0.98);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The countdown is a filament, not a border: inset from the corners so it reads
+   as something depleting rather than as an underline on the panel. */
+.quick-timer {
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  width: auto;
+  height: 1.5px;
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+/* A short answer should not show a scroll track at all. */
+#quick-answer-body::-webkit-scrollbar { width: 6px; }
+
+/* The countdown sat on the bottom edge, where the speech tail cuts through it
+   and turns it into a broken line that reads as a rendering fault. Nothing
+   competes along the top. */
+.quick-timer {
+  top: 0;
+  bottom: auto;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  opacity: 0.55;
+}
+
+/* The approval panel beside the pet stretched to the window floor, leaving a
+   pool of empty amber under the buttons. It should be the size of what it is
+   asking. */
+.pet-stage.has-bubble .bubble {
+  bottom: auto;
+  max-height: calc(100% - 152px);
+  overflow: auto;
+}
+
+/* The tab's caption is prose, so it is set as prose: sentence case, no
+   tracking, and quiet enough to read once and then ignore. */
+.quick-note {
+  font-family: var(--face-body);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.5;
+  color: var(--text-faint);
+  padding: 10px 12px 6px;
+}
+
+/* Row actions used to appear inline on hover, pushing the title and wrapping
+   the caption, so the whole list shifted under the pointer. They now float over
+   the row's right edge and change nothing about its size. */
+.convo { position: relative; }
+
+.convo-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  gap: 2px;
+  padding-left: 14px;
+  background: linear-gradient(90deg, transparent, var(--ink-800) 26%);
+}
+
+.convo-title,
+.convo-meta { padding-right: 4px; }
+
+/* Starred is a state, not an alarm. */
+.icon-btn.star.on { color: var(--bulb); opacity: 0.9; }
+
+/* ==========================================================================
+   Goals
+   ========================================================================== */
+
+/* A goal row is taller than a conversation because it carries state as well as
+   a name, so it gets a lit margin like the rest of the list but more room. */
+.convo.goal {
+  align-items: flex-start;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  cursor: default;
+}
+
+.convo.goal .convo-title {
+  white-space: normal;
+  color: var(--warm);
+  line-height: 1.35;
+}
+
+/* Watching is a standing arrangement, so it is stated in the open with its own
+   off switch rather than hidden behind a menu. */
+.goal-watch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 180, 84, 0.28);
+  background: rgba(255, 180, 84, 0.07);
+  font-family: var(--face-ui);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bulb);
+}
+
+.goal-stop {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 180, 84, 0.45);
+  background: transparent;
+  color: var(--bulb);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.goal-stop:hover { background: var(--bulb); color: var(--void); }
+
+/* Three tabs now, so they need to stay legible at a third of the width. */
+.tab { padding: 6px 4px; font-size: 10px; letter-spacing: 0.1em; }
+
+/* The watching badge states a condition rather than labelling a field, so it is
+   set as a phrase — caps and tracking are for labels. */
+.goal-watch {
+  font-family: var(--face-body);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* --------------------------------------------------------- workspace search */
+
+.sidebar-search {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.sidebar-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 30px 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--void);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.sidebar-search input::placeholder { color: var(--text-faint); }
+
+.sidebar-search input:focus {
+  border-color: var(--pet-deep);
+  box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.12);
+}
+
+.sidebar-search .icon-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 28px;
+  height: 28px;
+  color: var(--text-faint);
+}
+
+.search-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.search-summary,
+.search-empty {
+  padding: 8px 6px;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.search-result {
+  padding: 9px 9px 10px 12px;
+  border-left: 3px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 5px;
+  background: transparent;
+}
+
+.search-result[role='button'] { cursor: pointer; }
+.search-result[role='button']:hover,
+.search-result[role='button']:focus-visible {
+  border-left-color: var(--pet);
+  background: var(--ink-800);
+  outline: none;
+}
+
+.search-result-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-meta {
+  margin-top: 3px;
+  color: var(--pet);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.search-result-snippet {
+  display: -webkit-box;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.search-result-actions {
+  display: flex;
+  margin-top: 7px;
+}
+
+.search-result-use {
+  padding: 4px 8px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* ------------------------------------------------------- selection actions */
+.selection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--ink-850);
+}
+
+.selection-actions-label {
+  margin-right: 2px;
+  font-family: var(--face-ui);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.selection-actions .btn {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+/* --------------------------------------------------------- folder filter */
+.folder-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+}
+
+#conversation-folder-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--ink-900);
+  color: var(--text-dim);
+  font-family: var(--face-ui);
+  font-size: 11px;
+}
+
+.folder-controls .icon-btn {
+  padding: 5px 6px;
+  font-size: 13px;
+}
+
+/* ========================================================================
+   Tool Studio
+   A compact workbench for repeatable actions: the signal path is the visual
+   signature, connecting Adi's soft pet surface to the hard tool boundary.
+   ======================================================================== */
+
+.chat.studio-mode .chat-main {
+  background:
+    radial-gradient(90% 45% at 75% 0%, rgba(110, 168, 254, 0.055), transparent 66%),
+    var(--ink-900);
+}
+
+.sidebar.studio-mode .sidebar-search,
+.sidebar.studio-mode .folder-controls {
+  display: none;
+}
+
+.tabs {
+  flex-wrap: wrap;
+}
+
+.tab-studio {
+  color: var(--bulb);
+}
+
+.tab-studio.active {
+  color: var(--void);
+  background: var(--bulb);
+  box-shadow: 0 2px 10px var(--glow-bulb);
+}
+
+.tool-studio {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-approval {
+  flex: 0 0 auto;
+  max-height: min(280px, 38vh);
+  margin: 12px 16px 0;
+  overflow: auto;
+}
+
+.studio-approval .approval-title {
+  margin-bottom: 9px;
+  color: var(--text);
+  font-family: var(--face-ui);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.studio-approval .approval-actions {
+  flex-wrap: wrap;
+}
+
+#tool-studio-mount {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-shell {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.32fr) minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-library {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(17, 19, 31, 0.98), rgba(8, 9, 17, 0.96));
+}
+
+.studio-library-head {
+  padding: 18px 15px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.studio-kicker,
+.studio-template-label {
+  display: block;
+  color: var(--pet);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.studio-library-title {
+  display: block;
+  margin-top: 6px;
+  color: var(--warm);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.studio-library-note {
+  margin: 7px 0 14px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.studio-search {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  outline: none;
+  background: var(--void);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.studio-search:focus {
+  border-color: var(--pet-deep);
+  box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.12);
+}
+
+.studio-search::placeholder {
+  color: var(--text-faint);
+}
+
+.studio-library-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 9px;
+}
+
+.studio-tool-row {
+  display: block;
+  width: 100%;
+  margin-bottom: 5px;
+  padding: 10px 10px 9px 12px;
+  border: 0;
+  border-left: 2px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.studio-tool-row:hover,
+.studio-tool-row:focus-visible {
+  border-left-color: var(--pet);
+  outline: none;
+  background: var(--ink-800);
+}
+
+.studio-tool-row.active {
+  border-left-color: var(--bulb);
+  background: rgba(255, 180, 84, 0.08);
+}
+
+.studio-tool-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.studio-tool-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--warm);
+  font-family: var(--face-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-badge,
+.studio-source-badge {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-faint);
+  font-family: var(--face-ui);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.studio-tool-description {
+  display: -webkit-box;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.studio-tool-source,
+.studio-meta-copy {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-family: var(--face-ui);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.studio-library-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 9px 11px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.studio-library-foot .muted {
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.studio-refresh {
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
+.studio-empty {
+  padding: 20px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.studio-editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background:
+    linear-gradient(90deg, transparent 0, transparent 16px, rgba(126, 148, 210, 0.03) 16px, rgba(126, 148, 210, 0.03) 17px, transparent 17px),
+    var(--ink-900);
+}
+
+.studio-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 17px 19px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.studio-editor-heading {
+  min-width: 0;
+}
+
+.studio-editor-title {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--warm);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-editor-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.studio-source-badge {
+  border-color: rgba(255, 180, 84, 0.35);
+  color: var(--bulb);
+}
+
+.studio-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.studio-editor-actions .btn {
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.studio-delete {
+  color: var(--stop);
+}
+
+.studio-templates {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 19px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(8, 9, 17, 0.42);
+}
+
+.studio-template-label {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.studio-template-buttons {
+  display: flex;
+  gap: 5px;
+  min-width: 0;
+}
+
+.studio-template {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--face-ui);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.studio-template:hover,
+.studio-template:focus-visible {
+  border-color: var(--pet);
+  color: var(--pet);
+  outline: none;
+  background: rgba(110, 168, 254, 0.06);
+}
+
+.studio-editor-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.studio-editor-body {
+  max-width: 850px;
+  padding: 16px 19px 34px;
+}
+
+.studio-intro {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+
+.studio-intro-note,
+.studio-preview-note {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.studio-status {
+  min-height: 29px;
+  margin-bottom: 12px;
+  padding: 7px 9px;
+  border-left: 2px solid var(--line);
+  background: rgba(21, 24, 39, 0.65);
+  color: var(--text-dim);
+  font-family: var(--face-ui);
+  font-size: 10px;
+}
+
+.studio-status.ok {
+  border-left-color: var(--work);
+}
+
+.studio-status.dirty {
+  border-left-color: var(--bulb);
+  color: var(--bulb);
+}
+
+.studio-status.bad {
+  border-left-color: var(--stop);
+  color: #ffaaa5;
+}
+
+.studio-section {
+  margin-bottom: 13px;
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(17, 19, 31, 0.68);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.015) inset;
+}
+
+.studio-section-head,
+.studio-preview-heading,
+.studio-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.studio-section-head strong {
+  color: var(--warm);
+  font-size: 12px;
+}
+
+.studio-section-note {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.studio-field {
+  display: block;
+  margin-bottom: 9px;
+}
+
+.studio-field-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.studio-field-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.studio-field input,
+.studio-field select,
+.studio-field textarea,
+.studio-inline-fields input,
+.studio-inline-fields select,
+.studio-step-row input,
+.studio-step-row textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: none;
+  background: var(--void);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.studio-field textarea,
+.studio-code,
+.studio-step-row textarea {
+  resize: vertical;
+}
+
+.studio-field input:focus,
+.studio-field select:focus,
+.studio-field textarea:focus,
+.studio-step-row input:focus,
+.studio-step-row textarea:focus {
+  border-color: var(--pet-deep);
+  box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.1);
+}
+
+.studio-field input:disabled,
+.studio-field select:disabled,
+.studio-field textarea:disabled,
+.studio-step-row input:disabled,
+.studio-step-row textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.studio-description {
+  line-height: 1.4;
+}
+
+.studio-code,
+.studio-step-row textarea,
+.studio-output {
+  font-family: var(--face-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.studio-inline-fields {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.studio-param-list {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.studio-param-row {
+  display: grid;
+  grid-template-columns: 86px minmax(120px, 1.2fr) 78px 24px 105px minmax(110px, 1fr) 25px;
+  align-items: center;
+  gap: 5px;
+  min-width: 590px;
+}
+
+.studio-param-row input,
+.studio-param-row select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--void);
+  color: var(--text);
+  font-size: 10px;
+  outline: none;
+}
+
+.studio-param-row input:focus,
+.studio-param-row select:focus {
+  border-color: var(--pet-deep);
+  outline: none;
+}
+
+.studio-param-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  justify-self: center;
+  accent-color: var(--pet);
+}
+
+.studio-param-remove {
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  color: var(--stop);
+}
+
+.studio-add {
+  margin-top: 8px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.studio-step-list {
+  display: grid;
+  gap: 7px;
+}
+
+.studio-step-row {
+  display: grid;
+  grid-template-columns: 25px minmax(110px, 0.7fr) minmax(160px, 1.3fr) auto 25px;
+  align-items: start;
+  gap: 6px;
+}
+
+.studio-step-fill {
+  min-height: 34px;
+  padding: 6px 7px;
+  white-space: nowrap;
+  font-size: 9px;
+}
+
+.studio-step-number {
+  padding-top: 8px;
+  color: var(--bulb);
+  font-family: var(--face-mono);
+  font-size: 10px;
+}
+
+.studio-step-row textarea {
+  min-height: 42px;
+}
+
+.studio-compact-text {
+  min-height: 40px;
+}
+
+.studio-test {
+  border-color: rgba(110, 168, 254, 0.22);
+}
+
+.studio-use-defaults {
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+.studio-preview {
+  padding: 13px;
+  border: 1px solid rgba(110, 168, 254, 0.25);
+  border-radius: 8px;
+  background:
+    radial-gradient(80% 120% at 0% 0%, rgba(110, 168, 254, 0.1), transparent 70%),
+    rgba(12, 14, 24, 0.82);
+}
+
+.studio-signal-path {
+  display: grid;
+  grid-template-columns: minmax(75px, 1fr) 18px minmax(75px, 1fr) 18px minmax(100px, 1.4fr) 18px minmax(100px, 1.4fr);
+  align-items: stretch;
+  gap: 5px;
+}
+
+.studio-signal-node {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(8, 9, 17, 0.64);
+}
+
+.studio-signal-number {
+  color: var(--pet);
+  font-family: var(--face-mono);
+  font-size: 9px;
+}
+
+.studio-signal-title {
+  margin-top: 4px;
+  color: var(--warm);
+  font-size: 11px;
+}
+
+.studio-signal-detail {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.studio-signal-link {
+  align-self: center;
+  color: var(--bulb);
+  font-family: var(--face-mono);
+  font-size: 14px;
+  text-align: center;
+}
+
+.studio-gate {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 7px 8px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-dim);
+  font-size: 9px;
+}
+
+.studio-gate strong {
+  color: var(--work);
+  font-family: var(--face-ui);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.studio-gate-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--work);
+  box-shadow: 0 0 8px rgba(100, 214, 138, 0.72);
+}
+
+.studio-output-panel {
+  margin-top: 13px;
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(17, 19, 31, 0.68);
+}
+
+.studio-output-head {
+  margin-bottom: 8px;
+}
+
+.studio-output-empty {
+  padding: 8px;
+  border-left: 2px solid var(--line);
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.studio-output {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-left: 2px solid var(--work);
+  background: var(--void);
+  color: var(--text);
+}
+
+.studio-output.bad {
+  border-left-color: var(--stop);
+  color: #ffb9b2;
+}
+
+@media (max-width: 760px) {
+  .studio-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-library {
+    max-height: 190px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .studio-library-head {
+    padding: 10px 12px;
+  }
+
+  .studio-library-note {
+    display: none;
+  }
+
+  .studio-library-list {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 7px;
+  }
+
+  .studio-tool-row {
+    flex: 0 0 180px;
+    margin: 0;
+  }
+
+  .studio-editor-head,
+  .studio-templates {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .studio-editor-body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .studio-signal-path {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-signal-link {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-tool-row,
+  .studio-template,
+  .studio-signal-link {
+    transition: none;
+  }
+}
+
+
+/* ----------------------------------------------------------- message actions */
+.msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 18px;
+  margin-top: 5px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.msg.assistant:hover .msg-actions,
+.msg.assistant:focus-within .msg-actions { opacity: 1; }
+.msg-action {
+  appearance: none;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 3px 7px;
+  background: transparent;
+  color: var(--text-faint);
+  font: 10px var(--face-ui);
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.msg-action:hover:not(:disabled),
+.msg-action:focus-visible {
+  border-color: var(--pet);
+  color: var(--pet);
+  outline: none;
+}
+.msg-action:disabled { opacity: 0.5; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .msg-actions { transition: none; }
+}

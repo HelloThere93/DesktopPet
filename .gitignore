@@ -1,0 +1,46 @@
+# Downloaded dependencies and generated builds
+node_modules/
+dist/
+release/
+coverage/
+*.tsbuildinfo
+
+# Environment secrets and local package-manager credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+.npmrc
+
+# Local app state: conversations, tokens, settings and databases
+data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+/auth.json
+/credentials.json
+/tokens.json
+/mcp.json
+/settings.local.json
+
+# Private signing keys (do not commit real secrets in any file)
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Developer-only material excluded from this source distribution
+/tools/
+/DEVELOPMENT.md
+
+# Logs and caches
+*.log
+logs/
+.cache/
+.vite/
+
+# Operating-system clutter
+.DS_Store
+Thumbs.db
+Desktop.ini

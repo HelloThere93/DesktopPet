@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'"
+    />
+    <title>Adi</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./premium.css" />
+  </head>
+  <body>
+    <svg class="icon-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+        <symbol id="icon-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></symbol>
+        <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M3 13h4l3-7 4 12 3-5h4" /></symbol>
+        <symbol id="icon-link" viewBox="0 0 24 24"><path d="m10 14 4-4M9 16l-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M15 8l2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 0) scale(.92 1)" /></symbol>
+        <symbol id="icon-branch" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="6" r="2" /><path d="M6 7v10m0-3h5a7 7 0 0 0 7-6" /></symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M5 3v6m0 4v8M12 3v10m0 4v4M19 3v2m0 4v12" /><circle cx="5" cy="11" r="2" /><circle cx="12" cy="15" r="2" /><circle cx="19" cy="7" r="2" /></symbol>
+        <symbol id="icon-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="icon-camera" viewBox="0 0 24 24"><path d="m8 5 2-2h4l2 2h4a1 1 0 0 1 1 1v13H3V6a1 1 0 0 1 1-1Z" /><circle cx="12" cy="12" r="4" /></symbol>
+        <symbol id="icon-clipboard" viewBox="0 0 24 24"><path d="M8 5H5v16h14V5h-3M8 11h8m-8 4h6" /><rect x="8" y="2" width="8" height="5" rx="2" /></symbol>
+        <symbol id="icon-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8" /></symbol>
+        <symbol id="icon-speaker" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9ZM17 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /></symbol>
+        <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m4 15 11-11 5 5L9 20H4Zm9-9 5 5" /></symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></symbol>
+        <symbol id="adi-mark" viewBox="0 0 44 48">
+          <path class="mark-stem" d="M22 10V5l5-2" /><circle class="mark-bulb" cx="28" cy="3" r="3" />
+          <path class="mark-shell" d="M22 10C10 10 5 19 5 30s6 16 17 16 17-5 17-16-5-20-17-20Z" />
+          <rect class="mark-mask" x="10" y="20" width="24" height="18" rx="9" />
+          <path class="mark-eyes" d="M17 27v3m10-3v3m-8 4q3 3 6 0" />
+        </symbol>
+      </defs>
+    </svg>
+    <!-- Pet mode -->
+    <div id="pet-stage" class="pet-stage">
+      <div
+        id="pet"
+        class="pet"
+        data-mood="idle"
+        title="Click to chat · drag to move"
+        role="button"
+        tabindex="0"
+        aria-label="Open chat"
+      >
+        <div class="pet-aura" aria-hidden="true"></div>
+        <svg class="pet-body" viewBox="0 0 100 116" aria-hidden="true">
+          <defs>
+            <!-- Light falls from the upper left, so the body is lit there and
+                 deepens toward the lower right. Flat fill read as a sticker. -->
+            <radialGradient id="body-grad" cx="36%" cy="30%" r="78%">
+              <stop offset="0%" stop-color="var(--body-lit)" />
+              <stop offset="55%" stop-color="var(--body-mid)" />
+              <stop offset="100%" stop-color="var(--body-deep)" />
+            </radialGradient>
+            <linearGradient id="belly-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#fff" stop-opacity="0" />
+              <stop offset="100%" stop-color="#fff" stop-opacity="0.16" />
+            </linearGradient>
+            <radialGradient id="face-grad" cx="42%" cy="34%" r="75%">
+              <stop offset="0%" stop-color="#f5fffb" />
+              <stop offset="70%" stop-color="#e3f5ee" />
+              <stop offset="100%" stop-color="#c6e8df" />
+            </radialGradient>
+            <linearGradient id="eye-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2b555b" />
+              <stop offset="100%" stop-color="#132f38" />
+            </linearGradient>
+          </defs>
+
+          <ellipse class="shadow" cx="50" cy="105" rx="26" ry="5" />
+
+          <g class="bob">
+            <g class="squish">
+              <ellipse class="foot foot-left" cx="34" cy="95" rx="12" ry="6" />
+              <ellipse class="foot foot-right" cx="66" cy="95" rx="12" ry="6" />
+              <path
+                class="blob"
+                d="M50 9 C74 9 88 27 89 53 C91 79 79 98 51 99 C23 99 9 81 11 55 C12 29 25 9 50 9 Z"
+              />
+              <!-- Light gathering along the underside, as on something soft. -->
+              <path
+                class="belly"
+                d="M50 97 C30 97 15 82 13 62 C22 78 34 86 50 86 C66 86 78 78 87 62 C85 82 70 97 50 97 Z"
+              />
+              <path class="face-field" d="M50 31 C30 31 21 42 22 57 C23 73 36 79 50 79 C66 79 78 71 78 56 C78 42 70 31 50 31 Z" />
+              <!-- A single rim highlight does more for volume than shading. -->
+              <path class="rim" d="M22 34 C27 21 37 15 49 15" />
+              <path class="side-glow" d="M82 39 C86 53 82 68 74 79" />
+
+              <ellipse class="cheek" cx="28" cy="63" rx="7" ry="3.8" />
+              <ellipse class="cheek" cx="72" cy="63" rx="7" ry="3.8" />
+
+              <!-- Eyes translate toward the cursor; glints move further for a
+                   touch of parallax, which is what sells the depth. -->
+              <g class="eyes">
+                <g class="eye-shift">
+                  <ellipse class="eye-shell" cx="37" cy="48" rx="8.1" ry="9.8" />
+                  <ellipse class="eye-shell" cx="63" cy="48" rx="8.1" ry="9.8" />
+                  <ellipse class="eye" cx="37" cy="48" rx="6.2" ry="7.8" />
+                  <ellipse class="eye" cx="63" cy="48" rx="6.2" ry="7.8" />
+                  <circle class="glint" cx="39.4" cy="44.6" r="2.2" />
+                  <circle class="glint" cx="65.4" cy="44.6" r="2.2" />
+                  <circle class="glint glint-sm" cx="35.4" cy="50.4" r="1.1" />
+                  <circle class="glint glint-sm" cx="61.4" cy="50.4" r="1.1" />
+                </g>
+              </g>
+
+              <path class="mouth" d="M43 66 Q50 72 57 66" />
+              <circle class="heart-light" cx="50" cy="82" r="1.7" />
+              <text class="zzz" x="76" y="24">z</text>
+            </g>
+
+            <!-- Outside .squish so it keeps its own springy timing. -->
+            <g class="antenna">
+              <path class="stalk" d="M50 11 Q50 1 57 -1" />
+              <circle class="bulb-glow" cx="58" cy="-2" r="7" />
+              <circle class="bulb" cx="58" cy="-2" r="4" />
+            </g>
+          </g>
+        </svg>
+        <div id="pet-badge" class="pet-badge" hidden></div>
+        <div id="privacy-badge" class="privacy-badge" hidden>PAUSED</div>
+        <div id="pet-status" class="pet-status" data-state="idle" role="status" aria-live="polite" aria-atomic="true">
+          <span class="pet-status-dot" aria-hidden="true"></span>
+          <span id="pet-status-text">Ready</span>
+        </div>
+      </div>
+
+      <!-- Quick chat: ask in place, answer above the pet, then it clears -->
+      <div id="quick-answer" class="quick-answer" hidden>
+        <div id="quick-answer-body"></div>
+        <div id="quick-timer" class="quick-timer"></div>
+      </div>
+
+      <div id="quick" class="quick" hidden>
+        <div class="quick-head">
+          <div class="quick-presence" aria-hidden="true">
+            <span class="quick-status-dot"></span>
+            <span id="quick-status">Ready</span>
+          </div>
+          <div class="quick-actions">
+            <button id="btn-quick-open" class="quick-action" type="button" title="Open the full chat">Open</button>
+            <button id="btn-quick-stop" class="quick-action danger" type="button" title="Stop the current task" hidden>Stop</button>
+          </div>
+        </div>
+        <div class="quick-row">
+          <input
+            id="quick-input"
+            class="quick-input"
+            type="text"
+            placeholder="Quick question…"
+            autocomplete="off"
+            aria-label="Quick question"
+          />
+          <button id="btn-quick-screen" class="quick-btn" title="Show Adi your screen" aria-label="Show Adi your screen"><svg class="ui-icon" aria-hidden="true"><use href="#icon-camera" /></svg></button>
+          <button id="btn-quick-voice" class="quick-btn" title="Dictate" aria-label="Dictate a quick question"><svg class="ui-icon" aria-hidden="true"><use href="#icon-mic" /></svg></button>
+          <button id="btn-quick-speak" class="quick-btn" title="Read the answer aloud" aria-label="Read the answer aloud" aria-pressed="false"><svg class="ui-icon" aria-hidden="true"><use href="#icon-speaker" /></svg></button>
+        </div>
+      </div>
+
+      <!-- Confirmation bubble, anchored beside the pet -->
+      <div id="bubble" class="bubble" role="dialog" aria-label="Permission request" hidden>
+        <div class="bubble-reason" id="bubble-reason"></div>
+        <div class="bubble-cmd" id="bubble-cmd"></div>
+        <details class="bubble-detail">
+          <summary>Details</summary>
+          <pre id="bubble-detail"></pre>
+        </details>
+        <div class="bubble-actions">
+          <button id="bubble-allow" class="btn btn-primary">Allow once</button>
+          <button id="bubble-task" class="btn">This request</button>
+          <button id="bubble-session" class="btn">This session</button>
+          <button id="bubble-always" class="btn">Always allow</button>
+          <button id="bubble-deny" class="btn btn-ghost">Deny</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat mode -->
+    <div id="chat" class="chat" hidden>
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-top">
+          <div class="sidebar-brand">
+            <svg class="brand-mark" aria-hidden="true"><use href="#adi-mark" /></svg>
+            <div><strong>adi</strong><span>Your desktop companion</span></div>
+          </div>
+          <button id="btn-new" class="btn btn-primary btn-block"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus" /></svg>New chat</button>
+          <div class="tabs" role="tablist">
+            <button id="tab-chats" class="tab active" role="tab" aria-selected="true" aria-controls="convo-list">Chats</button>
+            <button id="tab-quick" class="tab" role="tab" aria-selected="false" aria-controls="convo-list">Quick</button>
+            <button id="tab-goals" class="tab" role="tab" aria-selected="false" aria-controls="goal-list">Goals</button>
+            <button id="tab-archived" class="tab" role="tab" aria-selected="false" aria-controls="convo-list">Archived</button>
+            <button id="tab-studio" class="tab tab-studio" role="tab" aria-selected="false" aria-controls="tool-studio">Studio</button>
+          </div>
+          <div class="sidebar-search">
+            <input id="workspace-search" type="search" maxlength="200" placeholder="Search workspace…" autocomplete="off" aria-label="Search chats, notes, goals, assignments, research, projects, workflows, and optional local files" />
+            <button id="workspace-search-clear" class="icon-btn" type="button" hidden aria-label="Clear workspace search">×</button>
+          </div>
+          <div class="folder-controls" aria-label="Conversation folders">
+            <select id="conversation-folder-filter" aria-label="Filter conversations by folder">
+              <option value="">All folders</option>
+              <option value="0">Unfiled</option>
+            </select>
+            <button id="btn-folder-new" class="icon-btn" type="button" title="Create folder" aria-label="Create conversation folder"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus" /></svg></button>
+            <button id="btn-folder-rename" class="icon-btn" type="button" title="Rename selected folder" aria-label="Rename selected conversation folder" disabled><svg class="ui-icon" aria-hidden="true"><use href="#icon-edit" /></svg></button>
+            <button id="btn-folder-delete" class="icon-btn danger" type="button" title="Delete selected folder" aria-label="Delete selected conversation folder" disabled><svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg></button>
+          </div>
+        </div>
+        <div id="quick-note" class="quick-note" hidden>
+          Asked from the pet. Cleared 4 hours after the last message, unless you
+          star it.
+        </div>
+        <div id="goal-note" class="quick-note" hidden>
+          What you are working toward. Adi keeps these in mind in every chat.
+        </div>
+        <div id="archive-note" class="quick-note" hidden>
+          Archived conversations stay searchable here and can be restored at any time.
+        </div>
+        <div id="search-results" class="search-results" hidden></div>
+        <div id="convo-list" class="convo-list"></div>
+        <div id="goal-list" class="convo-list" hidden></div>
+        <div class="sidebar-foot">
+          <span class="dot" id="status-dot"></span>
+          <span class="muted" id="status-text">checking…</span>
+        </div>
+      </aside>
+
+      <div class="chat-main">
+        <header class="chat-head">
+          <button id="btn-sidebar" class="icon-btn" title="Show or hide conversations" aria-label="Show or hide conversations"><svg class="ui-icon" aria-hidden="true"><use href="#icon-panel" /></svg></button>
+          <svg class="chat-presence" aria-hidden="true"><use href="#adi-mark" /></svg>
+          <div class="chat-title">
+            <strong id="convo-title">Adi</strong>
+            <span id="auto-pill" class="auto-pill" hidden></span>
+            <span id="privacy-pill" class="auto-pill privacy-pill" hidden>PRIVACY PAUSE</span>
+          </div>
+          <div class="chat-head-actions">
+            <span class="muted" id="model-badge"></span>
+            <button id="btn-activity" class="icon-btn" title="Show current activity" aria-label="Show current activity"><svg class="ui-icon" aria-hidden="true"><use href="#icon-activity" /></svg></button>
+            <button id="btn-references" class="icon-btn" title="Show conversation references" aria-label="Show conversation references"><svg class="ui-icon" aria-hidden="true"><use href="#icon-link" /></svg></button>
+            <button id="btn-branch" class="icon-btn" title="Branch this conversation" aria-label="Branch this conversation"><svg class="ui-icon" aria-hidden="true"><use href="#icon-branch" /></svg></button>
+            <button id="btn-settings" class="icon-btn" title="Settings" aria-label="Open settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings" /></svg></button>
+            <button id="btn-collapse" class="icon-btn" title="Back to pet" aria-label="Back to pet"><svg class="ui-icon" aria-hidden="true"><use href="#icon-down" /></svg></button>
+          </div>
+        </header>
+
+        <section id="tool-studio" class="tool-studio" role="region" aria-label="Tool Studio" hidden>
+          <div id="studio-approval" class="approval studio-approval" role="alertdialog" aria-label="Studio test approval" aria-live="assertive" hidden></div>
+          <div id="tool-studio-mount"></div>
+        </section>
+
+        <div id="messages" class="messages"></div>
+        <div id="selection-actions" class="selection-actions" role="toolbar" aria-label="Actions for selected transcript text" hidden>
+          <span class="selection-actions-label">Use selected text:</span>
+          <button type="button" class="btn" data-selection-action="explain">Explain</button>
+          <button type="button" class="btn" data-selection-action="simplify">Simplify</button>
+          <button type="button" class="btn" data-selection-action="summarize">Summarize</button>
+          <button type="button" class="btn" data-selection-action="rewrite">Rewrite</button>
+          <button type="button" class="btn" data-selection-action="fact-check">Fact-check</button>
+          <button type="button" class="btn" data-selection-action="ask">Ask</button>
+        </div>
+
+        <div id="voice-bar" class="voice-bar" hidden>
+          <span class="voice-dot"></span>
+          <div class="voice-meter"><div id="voice-level" class="voice-level"></div></div>
+          <span id="voice-status" class="voice-status">Listening…</span>
+          <button id="btn-voice-stop" class="btn btn-ghost">End voice</button>
+        </div>
+
+        <div id="attachments" class="attachments" hidden></div>
+
+        <div id="composer" class="composer">
+          <button id="btn-attach" class="icon-btn" title="Attach an image or file" aria-label="Attach an image or file"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus" /></svg></button>
+          <button id="btn-screen" class="icon-btn" title="Show Adi your screen" aria-label="Show Adi your screen"><svg class="ui-icon" aria-hidden="true"><use href="#icon-camera" /></svg></button>
+          <button id="btn-clipboard" class="icon-btn" title="Put clipboard text into the draft" aria-label="Put clipboard text into the draft"><svg class="ui-icon" aria-hidden="true"><use href="#icon-clipboard" /></svg></button>
+          <textarea
+            id="input"
+            rows="1"
+            maxlength="100000"
+            placeholder="What are we working on?"
+            aria-label="Message"
+          ></textarea>
+          <span class="composer-hint" aria-hidden="true">Enter to send</span>
+          <button id="btn-voice" class="icon-btn" title="Dictate a message" aria-label="Dictate a message"><svg class="ui-icon" aria-hidden="true"><use href="#icon-mic" /></svg></button>
+          <button id="btn-speak" class="icon-btn" title="Read replies aloud" aria-label="Read replies aloud" aria-pressed="false"><svg class="ui-icon" aria-hidden="true"><use href="#icon-speaker" /></svg></button>
+          <button id="btn-send" class="btn btn-primary">Send</button>
+          <button id="btn-stop" class="btn btn-ghost" hidden>Stop</button>
+        </div>
+      </div>
+
+      <div id="command-palette" class="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" hidden>
+        <div class="command-palette-card">
+          <div class="command-palette-head">
+            <span class="command-palette-kicker">Quick actions</span>
+            <kbd>Ctrl&nbsp;Space</kbd>
+          </div>
+          <input id="command-palette-input" class="command-palette-input" type="search" maxlength="120" placeholder="What do you want to do?" autocomplete="off" aria-label="Filter commands" aria-controls="command-palette-list" />
+          <div id="command-palette-list" class="command-palette-list" role="listbox" aria-label="Available commands"></div>
+          <div class="command-palette-foot">↑ ↓ to move · Enter to run · Esc to close</div>
+        </div>
+      </div>
+
+      <div id="text-dialog" class="text-dialog" role="dialog" aria-modal="true" aria-labelledby="text-dialog-title" hidden>
+        <form id="text-dialog-form" class="text-dialog-card">
+          <div id="text-dialog-title" class="text-dialog-title"></div>
+          <textarea id="text-dialog-input" rows="4" maxlength="100000" autocomplete="off" aria-label="Text value"></textarea>
+          <div class="text-dialog-hint">Enter to save · Shift+Enter for a new line</div>
+          <div class="text-dialog-actions">
+            <button id="text-dialog-cancel" class="btn btn-ghost" type="button">Cancel</button>
+            <button class="btn btn-primary" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+      <!-- Settings drawer -->
+      <div id="settings" class="settings" hidden>
+        <div class="settings-head">
+          <strong>Settings</strong>
+          <button id="btn-settings-close" class="icon-btn" aria-label="Close settings">✕</button>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Access point</span>
+          <select id="provider-select"></select>
+          <span class="field-note" id="provider-note"></span>
+        </label>
+
+        <div class="field" id="key-field" hidden>
+          <span class="field-label">API key</span>
+          <div class="key-row">
+            <input id="key-input" type="password" placeholder="paste key…" autocomplete="off" aria-label="API key" />
+            <button id="btn-key-save" class="btn">Save</button>
+            <button id="btn-key-clear" class="btn btn-ghost" title="Forget this key" aria-label="Forget this API key">✕</button>
+          </div>
+          <span class="field-note" id="key-note"></span>
+        </div>
+
+        <label class="field" id="baseurl-field" hidden>
+          <span class="field-label">Base URL</span>
+          <input id="baseurl-input" type="text" placeholder="https://host/v1" autocomplete="off" aria-label="Base URL" />
+          <span class="field-note">Must speak the OpenAI /chat/completions API.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Model</span>
+          <select id="model-select"></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Reasoning effort</span>
+          <select id="effort-select"></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Microphone</span>
+          <select id="mic-select"></select>
+          <span class="field-note" id="mic-note">
+            Used for dictation. Pick a device after granting microphone access once.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Voice</span>
+          <select id="voice-select"></select>
+          <span class="field-note">How Adi sounds when speaking.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Voice model</span>
+          <select id="voice-model-select"></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Summon shortcut</span>
+          <select id="hotkey-select"></select>
+          <span class="field-note" id="hotkey-note">
+            Brings Adi forward and opens the quick question box from anywhere.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Privacy pause</span>
+          <div class="workspace-consent">
+            <input id="privacy-mode" type="checkbox" />
+            <span>Pause new AI turns, connected access, background jobs, and reminders</span>
+          </div>
+          <span class="field-note">
+            Stops screen/audio capture, browser/account/MCP access, goal watchers, queued/running background jobs, and scheduled reminder notifications. Partially applied background mutations are marked uncertain for recovery. Existing local history stays on disk.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Approval mode</span>
+          <select id="mode-select"></select>
+          <span class="field-note" id="mode-note"></span>
+        </label>
+
+        <div class="field">
+          <span class="field-label">Saved approvals</span>
+          <div id="permission-list" class="permission-list"></div>
+          <div class="key-row">
+            <button id="btn-permissions-refresh" class="btn">Refresh</button>
+          </div>
+          <span class="field-note" id="permissions-note">
+            Exact “Always allow” rules are listed here. Remove one to make Adi ask again.
+          </span>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Browser</span>
+          <select id="profile-select"></select>
+          <div class="key-row">
+            <button id="btn-browser-profiles-refresh" class="btn" type="button">Refresh</button>
+          </div>
+          <span class="field-note" id="browser-profile-note">
+            A real profile carries your logins. Adi reuses it when automation is already connected; switching profiles or attaching to a non-automated session may require closing Chrome once.
+          </span>
+        </label>
+
+        <div class="field">
+          <span class="field-label">Workspace folder</span>
+          <div class="key-row">
+            <input id="workspace-root-input" type="text" placeholder="Choose a folder" autocomplete="off" readonly aria-label="Workspace folder" />
+            <button id="btn-workspace-pick" class="btn">Choose</button>
+            <button id="btn-workspace-clear" class="btn">Clear</button>
+          </div>
+          <span class="field-note" id="workspace-root-note">
+            No folder selected. Choose one to use bounded workspace metadata.
+          </span>
+        </div>
+        <label class="field">
+          <span class="field-label">Search selected workspace files</span>
+          <div class="workspace-consent">
+            <input id="workspace-file-search-enabled" type="checkbox" />
+            <span>Include bounded filename and text matches in workspace search</span>
+          </div>
+          <span class="field-note">
+            Off by default. When enabled, search reads only small text files inside the selected folder; secret-like paths, links, binaries, and dependency folders are skipped.
+          </span>
+        </label>
+        <div class="field">
+          <span class="field-label">Projects</span>
+          <div id="project-list" class="project-list"></div>
+          <div class="key-row">
+            <button id="btn-projects-refresh" class="btn">Refresh</button>
+          </div>
+          <span class="field-note">
+            Project roots are references only; Adi does not scan them unless you explicitly ask.
+          </span>
+        </div>
+        <div class="field">
+          <span class="field-label">Assignment workspace</span>
+          <div id="assignment-list" class="assignment-list"></div>
+          <div class="key-row">
+            <button id="btn-assignments-refresh" class="btn">Refresh</button>
+          </div>
+          <span class="field-note">
+            Read-only summaries of active, completed, and archived student work. Use chat to create or update assignments.
+          </span>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Share workspace metadata</span>
+          <div class="workspace-consent">
+            <input id="workspace-context-enabled" type="checkbox" />
+            <span>Allow bounded names and project markers in new model prompts</span>
+          </div>
+          <span class="field-note">
+            Off by default. Adi never reads file contents for this context.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Share active goals</span>
+          <div class="workspace-consent">
+            <input id="goal-context-enabled" type="checkbox" />
+            <span>Allow relevant active-goal summaries in new model prompts</span>
+          </div>
+          <span class="field-note">
+            Off by default. Only a bounded, query-selected summary is shared.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Share saved lessons</span>
+          <div class="workspace-consent">
+            <input id="learning-memory-enabled" type="checkbox" />
+            <span>Allow relevant saved lessons in new model prompts</span>
+          </div>
+          <span class="field-note">
+            Off by default. Adi uses bounded reference notes, not the full memory file.
+          </span>
+        </label>
+        <div class="field">
+          <span class="field-label">Saved memory</span>
+          <div id="lesson-list" class="lesson-list"></div>
+          <div class="key-row">
+            <button id="btn-lessons-refresh" class="btn">Refresh</button>
+          </div>
+          <span class="field-note" id="lessons-note">
+            Inspect the notes Adi has saved. Editing redacts secret-like values; deletion asks first.
+          </span>
+        </div>
+
+        <div class="field">
+          <button id="btn-check" class="btn btn-block">Check which models your plan allows</button>
+          <span class="field-note">
+            Sends a tiny request per model and marks the ones your account accepts.
+          </span>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Background work</span>
+          <div id="jobs-list" class="jobs-list"></div>
+          <div class="key-row">
+            <button id="btn-jobs-refresh" class="btn">Refresh</button>
+          </div>
+          <span class="field-note">
+            Long-running batches show progress here. Cancel queued or running work; jobs do not resume automatically after restart.
+          </span>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Recovery journal</span>
+          <div id="mutations-list" class="mutations-list"></div>
+          <div class="key-row">
+            <button id="btn-mutations-refresh" class="btn">Refresh</button>
+          </div>
+          <span class="field-note">
+            Recent file mutations are shown with bounded metadata. Undo appears only when the target is unchanged and the inverse has been verified.
+          </span>
+        </div>
+        <div class="field">
+
+          <span class="field-label">MCP servers</span>
+          <div id="mcp-list" class="mcp-list"></div>
+          <div class="key-row">
+            <button id="btn-mcp-edit" class="btn btn-block">Edit mcp.json</button>
+            <button id="btn-mcp-reload" class="btn">Reload</button>
+          </div>
+          <span class="field-note">
+            Their tools appear to Adi as mcp__server__tool and still ask before running.
+            Enable or disable configured servers here; enabling one may launch a program or connect to a remote service.
+            Expand a connected server to inspect exposed tools or disable one capability without disabling the whole server.
+            Server-provided descriptions are reference data, not instructions.
+          </span>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Diagnostics</span>
+          <div id="diagnostics-summary" class="diagnostics-summary">Not run yet.</div>
+          <div id="diagnostics-metrics" class="diagnostics-metrics"></div>
+          <div id="diagnostics-list" class="diagnostics-list"></div>
+          <div class="key-row">
+            <button id="btn-diagnostics-run" class="btn btn-block">Run Diagnostics</button>
+          </div>
+          <span class="field-note">
+            Checks model/API access, MCP, database, memory, tools, automation, queue, recent errors, and performance.
+          </span>
+        </div>
+
+        <div class="field">
+          <button id="btn-signin" class="btn btn-ghost btn-block">Sign in</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="references" class="references" role="region" aria-label="Conversation references" hidden>
+      <div class="settings-head">
+        <strong>References</strong>
+        <button id="btn-references-close" class="icon-btn" aria-label="Close conversation references">✕</button>
+      </div>
+      <div id="conversation-references-note" class="field-note">
+        Explicit links stay as local metadata. File paths are shown here only; this panel never reads or sends file contents.
+      </div>
+      <div id="conversation-references-list" class="reference-list"></div>
+      <div class="field">
+        <span class="field-label">Link a reference</span>
+        <div class="reference-buttons">
+          <button id="btn-reference-project" class="btn">Project</button>
+          <button id="btn-reference-goal" class="btn">Goal</button>
+          <button id="btn-reference-assignment" class="btn">Assignment</button>
+          <button id="btn-reference-file" class="btn">File</button>
+        </div>
+        <span class="field-note">
+          Choose an existing project, goal, or assignment by id/title. File links require an absolute path and store metadata only.
+        </span>
+      </div>
+    </div>
+
+    <div id="activity" class="activity" role="region" aria-label="Current activity" hidden>
+      <div class="settings-head">
+        <strong>Activity</strong>
+        <button id="btn-activity-cancel" class="btn btn-ghost activity-cancel" hidden>Cancel</button>
+        <button id="btn-activity-close" class="icon-btn" aria-label="Close activity">✕</button>
+      </div>
+      <div id="activity-state" class="activity-state" role="status" aria-live="polite" aria-atomic="true">Idle.</div>
+      <div id="activity-list" class="activity-list"></div>
+      <span class="field-note">
+        Shows the current conversation, tool, approval, failure, and background-job state. It never starts work.
+      </span>
+    </div>
+
+    <script type="module" src="./app.ts"></script>
+  </body>
+</html>
